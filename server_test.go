@@ -11,7 +11,7 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	app, err := pricing.NewApp(nil)
+	app, err := pricing.NewApp([]string{"pricing"})
 	if err != nil {
 		log.Fatalf("failed to create new App: %v", err)
 	}

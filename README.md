@@ -2,6 +2,18 @@
 
 ## Getting started
 
+Start a Postgres database with Docker:
+
+```
+docker run \
+  --rm \
+  --name postgres \
+  --publish 5432:5432 \
+  --env POSTGRES_PASSWORD=password \
+  --detach \
+  docker.io/postgres:15.3-alpine
+```
+
 Run the application:
 
 ```
@@ -23,4 +35,10 @@ Run tests:
 
 ```
 go test -race -v ./...
+```
+
+Run tests without testcontainers (Docker):
+
+```
+go test -short -race -v ./...
 ```
