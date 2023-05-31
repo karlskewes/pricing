@@ -30,7 +30,7 @@ func NewApp(args []string) (*App, error) {
 	// parse flags for configuration
 	fs := flag.NewFlagSet("pricing", flag.ContinueOnError)
 
-	inMemoryRepo := fs.Bool("in-memory", true, "use in-memory pricing repository, default")
+	enablePostgres := fs.Bool("enable-postgres", false, "use postgres pricing repository")
 	dbConnStr := fs.String("db-conn-str", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable", "database connection string")
 	dbPoolSettings := fs.String("db-pool-settings", "", "database pool settings")
 
@@ -39,20 +39,20 @@ func NewApp(args []string) (*App, error) {
 	}
 
 	var repo storage.Repository
-	if *inMemoryRepo {
-		imr, err := inmemory.New(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to create new in-memory repository: %w", err)
-		}
-
-		repo = imr
-	} else {
+	if *enablePostgres {
 		postgres, err := postgres.New(context.Background(), *dbConnStr, *dbPoolSettings)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new postgres database pool: %w", err)
 		}
 
 		repo = postgres
+	} else {
+		imr, err := inmemory.New(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new in-memory repository: %w", err)
+		}
+
+		repo = imr
 	}
 
 	storage := storage.NewService(repo)
