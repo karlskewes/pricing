@@ -108,6 +108,33 @@ func (pg *Postgres) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (pg *Postgres) AddBrand(ctx context.Context, name string) error {
+	sql := `INSERT INTO brand (name) VALUES ($1)`
+
+	_, err := pg.pool.Exec(ctx, sql, name)
+	if err != nil {
+		return fmt.Errorf("failed to insert brand into database: %w", err)
+	}
+
+	return nil
+}
+
+func (pg *Postgres) GetBrand(ctx context.Context, name string) (storage.Brand, error) {
+	sql := `SELECT (id, name) FROM brand WHERE name=$1`
+
+	var brand storage.Brand
+	err := pg.pool.QueryRow(ctx, sql, name).Scan(&brand)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return storage.Brand{}, errors.New("no matching brand found")
+		}
+
+		return storage.Brand{}, fmt.Errorf("failed to query database: %w", err)
+	}
+
+	return brand, nil
+}
+
 func (pg *Postgres) AddPrice(ctx context.Context, price storage.Price) error {
 	sql := `INSERT INTO price (brand_id, start_date, end_date, product_id, priority, price, curr) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
@@ -136,31 +163,4 @@ func (pg *Postgres) GetPrice(ctx context.Context, brandID, productID int, date t
 	}
 
 	return fp, nil
-}
-
-func (pg *Postgres) AddBrand(ctx context.Context, name string) error {
-	sql := `INSERT INTO brand (name) VALUES ($1)`
-
-	_, err := pg.pool.Exec(ctx, sql, name)
-	if err != nil {
-		return fmt.Errorf("failed to insert brand into database: %w", err)
-	}
-
-	return nil
-}
-
-func (pg *Postgres) GetBrand(ctx context.Context, name string) (storage.Brand, error) {
-	sql := `SELECT (id, name) FROM brand WHERE name=$1`
-
-	var brand storage.Brand
-	err := pg.pool.QueryRow(ctx, sql, name).Scan(&brand)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.Brand{}, errors.New("no matching brand found")
-		}
-
-		return storage.Brand{}, fmt.Errorf("failed to query database: %w", err)
-	}
-
-	return brand, nil
 }

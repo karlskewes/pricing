@@ -297,3 +297,5 @@ func TestPrices(t *testing.T) {
 		})
 	}
 }
+
+// TODO, AddBrand, GetBrand

@@ -55,6 +55,18 @@ func NewService(repo Repository) *Service {
 	}
 }
 
+func (srv *Service) AddBrand(ctx context.Context, name string) error {
+	// TODO: Any business logic common to Repositories
+	// TODO: Add any timeout to ctx
+	return srv.repo.AddBrand(ctx, name)
+}
+
+func (srv *Service) GetBrand(ctx context.Context, name string) (Brand, error) {
+	// TODO: Any business logic common to Repositories
+	// TODO: Add any timeout to ctx
+	return srv.repo.GetBrand(ctx, name)
+}
+
 // AddPrice inserts a new Price into the backing storage repository.
 func (srv *Service) AddPrice(ctx context.Context, price Price) error {
 	// TODO: Any business logic common to Repositories
@@ -71,14 +83,6 @@ func (srv *Service) GetPrice(ctx context.Context, brandID, productID int, date t
 	return srv.repo.GetPrice(ctx, brandID, productID, date)
 }
 
-func (srv *Service) AddBrand(ctx context.Context, name string) error {
-	// TODO: Any business logic common to Repositories
-	// TODO: Add any timeout to ctx
-	return srv.repo.AddBrand(ctx, name)
-}
-
-func (srv *Service) GetBrand(ctx context.Context, name string) (Brand, error) {
-	// TODO: Any business logic common to Repositories
-	// TODO: Add any timeout to ctx
-	return srv.repo.GetBrand(ctx, name)
-}
+// Consider
+// func (srv *Service) DeleteBrand(...)
+// func (srv *Service) DeletePrice(...)

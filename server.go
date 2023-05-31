@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/karlskewes/pricing/storage"
+	"github.com/karlskewes/pricing/storage/inmemory"
 	"github.com/karlskewes/pricing/storage/postgres"
 	"golang.org/x/sync/errgroup"
 )
@@ -29,6 +30,7 @@ func NewApp(args []string) (*App, error) {
 	// parse flags for configuration
 	fs := flag.NewFlagSet("pricing", flag.ContinueOnError)
 
+	inMemoryRepo := fs.Bool("in-memory", true, "use in-memory pricing repository, default")
 	dbConnStr := fs.String("db-conn-str", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable", "database connection string")
 	dbPoolSettings := fs.String("db-pool-settings", "", "database pool settings")
 
@@ -36,9 +38,21 @@ func NewApp(args []string) (*App, error) {
 		return nil, fmt.Errorf("unable to parse flags: %w", err)
 	}
 
-	repo, err := postgres.New(context.Background(), *dbConnStr, *dbPoolSettings)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new postgres database pool: %w", err)
+	var repo storage.Repository
+	if *inMemoryRepo {
+		imr, err := inmemory.New(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new in-memory repository: %w", err)
+		}
+
+		repo = imr
+	} else {
+		postgres, err := postgres.New(context.Background(), *dbConnStr, *dbPoolSettings)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new postgres database pool: %w", err)
+		}
+
+		repo = postgres
 	}
 
 	storage := storage.NewService(repo)
