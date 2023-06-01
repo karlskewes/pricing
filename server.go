@@ -3,9 +3,14 @@ package pricing
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/karlskewes/pricing/storage"
+	"github.com/karlskewes/pricing/storage/inmemory"
+	"github.com/karlskewes/pricing/storage/postgres"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -16,13 +21,41 @@ const (
 )
 
 type App struct {
-	srv *http.Server
+	srv     *http.Server
+	storage *storage.Service
 	// logger, etc
 }
 
 func NewApp(args []string) (*App, error) {
 	// parse flags for configuration
-	// fs := flag.NewFlagSet(name string, errorHandling flag.ErrorHandling)
+	fs := flag.NewFlagSet("pricing", flag.ContinueOnError)
+
+	enablePostgres := fs.Bool("enable-postgres", false, "use postgres pricing repository")
+	dbConnStr := fs.String("db-conn-str", "postgres://postgres:password@localhost:5432/postgres?sslmode=disable", "database connection string")
+	dbPoolSettings := fs.String("db-pool-settings", "", "database pool settings")
+
+	if err := fs.Parse(args[1:]); err != nil {
+		return nil, fmt.Errorf("unable to parse flags: %w", err)
+	}
+
+	var repo storage.Repository
+	if *enablePostgres {
+		postgres, err := postgres.New(context.Background(), *dbConnStr, *dbPoolSettings)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new postgres database pool: %w", err)
+		}
+
+		repo = postgres
+	} else {
+		imr, err := inmemory.New(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new in-memory repository: %w", err)
+		}
+
+		repo = imr
+	}
+
+	storage := storage.NewService(repo)
 
 	mux := http.NewServeMux()
 	// add middleware for Prometheus metrics, logging, OTEL, etc
@@ -34,6 +67,7 @@ func NewApp(args []string) (*App, error) {
 			Addr:    defaultListenAddr,
 			Handler: mux,
 		},
+		storage: storage,
 	}
 
 	return app, nil
