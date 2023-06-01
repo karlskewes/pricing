@@ -6,17 +6,8 @@ import (
 	"time"
 )
 
-// Repository implements persisting and reading pricing data from a backend.
-type Repository interface {
-	AddPrice(ctx context.Context, price Price) error
-	GetPrice(ctx context.Context, brandID, productID int, date time.Time) (FinalPrice, error)
-	AddBrand(ctx context.Context, name string) error
-	GetBrand(ctx context.Context, name string) (Brand, error)
-	Shutdown(ctx context.Context) error
-}
-
 type Price struct {
-	BrandID   int       // BRAND_ID: foreign key of the group chain (1 = ZARA).
+	BrandID   int       // BRAND_ID: foreign key of the group chain (1 = EXAMPLE).
 	StartDate time.Time // START_DATE: date range in which the indicated price applies.
 	EndDate   time.Time // END_DATE: date range in which the indicated price applies.
 	ProductID int       // PRODUCT_ID: Product code identifier.
@@ -26,7 +17,7 @@ type Price struct {
 }
 
 type FinalPrice struct {
-	BrandID   int       // BRAND_ID: foreign key of the group chain (1 = ZARA).
+	BrandID   int       // BRAND_ID: foreign key of the group chain (1 = EXAMPLE).
 	StartDate time.Time // START_DATE: date range in which the indicated price applies.
 	EndDate   time.Time // END_DATE: date range in which the indicated price applies.
 	ProductID int       // PRODUCT_ID: Product code identifier.
