@@ -1,4 +1,4 @@
-package inmemory_test
+package pricing_test
 
 import (
 	"context"
@@ -6,14 +6,54 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/karlskewes/pricing/storage"
-	"github.com/karlskewes/pricing/storage/inmemory"
+	"github.com/karlskewes/pricing"
+	"github.com/testcontainers/testcontainers-go"
+	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func TestNew(t *testing.T) {
+const (
+	defaultPostgresImage = "docker.io/postgres:15.3-alpine"
+	dbname               = "test-db"
+	user                 = "postgres"
+	password             = "password"
+)
+
+type dbContainer struct {
+	testcontainers.Container
+	connStr string
+}
+
+func setupDB(ctx context.Context) (*dbContainer, error) {
+	container, err := tcpostgres.RunContainer(ctx,
+		testcontainers.WithImage(defaultPostgresImage),
+		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(10*time.Second)),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// explicitly set sslmode=disable because the container is not configured to use TLS
+	connStr, err := container.ConnectionString(ctx, "sslmode=disable", "application_name=test")
+	if err != nil {
+		return nil, err
+	}
+
+	return &dbContainer{Container: container, connStr: connStr}, nil
+}
+
+func TestNewPostgresRepository(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
 	ctx := context.Background()
 
-	db, err := inmemory.New(ctx)
+	dbContainer, err := setupDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := pricing.NewPostgresRepository(ctx, dbContainer.connStr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,10 +63,18 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestInMemory_AddPrice(t *testing.T) {
+func TestAddPrice(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
 	ctx := context.Background()
 
-	db, err := inmemory.New(ctx)
+	dbContainer, err := setupDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := pricing.NewPostgresRepository(ctx, dbContainer.connStr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +87,7 @@ func TestInMemory_AddPrice(t *testing.T) {
 	startDate := time.Now().Round(time.Microsecond).UTC()
 	endDate := startDate.Add(1 * time.Hour)
 
-	price := storage.Price{
+	price := pricing.Price{
 		BrandID:   1,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -59,10 +107,18 @@ func TestInMemory_AddPrice(t *testing.T) {
 	}
 }
 
-func TestInMemory_GetPrice(t *testing.T) {
+func TestGetPrice(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
 	ctx := context.Background()
 
-	db, err := inmemory.New(ctx)
+	dbContainer, err := setupDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := pricing.NewPostgresRepository(ctx, dbContainer.connStr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +136,7 @@ func TestInMemory_GetPrice(t *testing.T) {
 	endDate := startDate.Add(1 * time.Hour)
 	date2 := startDate.Add(2 * time.Hour)
 
-	price := storage.Price{
+	price := pricing.Price{
 		BrandID:   1,
 		StartDate: startDate,
 		EndDate:   endDate,
@@ -95,7 +151,7 @@ func TestInMemory_GetPrice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := storage.FinalPrice{
+	want := pricing.FinalPrice{
 		BrandID:   price.BrandID,
 		StartDate: price.StartDate,
 		EndDate:   price.EndDate,
@@ -125,106 +181,18 @@ func TestInMemory_GetPrice(t *testing.T) {
 	}
 }
 
-func TestInMemory_AddBrand(t *testing.T) {
+func TestPrices(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
 	ctx := context.Background()
 
-	db, err := inmemory.New(ctx)
+	dbContainer, err := setupDB(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	brandName := "EXAMPLE"
-
-	err = db.AddBrand(ctx, brandName)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Add a second brand with the same name
-	err = db.AddBrand(ctx, brandName)
-	if err == nil {
-		t.Error("expected duplicate brand error")
-	}
-}
-
-func TestInMemory_GetBrand(t *testing.T) {
-	ctx := context.Background()
-
-	db, err := inmemory.New(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	brandName := "EXAMPLE"
-	// TODO, add collision
-
-	err = db.AddBrand(ctx, brandName)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := db.GetBrand(ctx, brandName)
-	if err != nil {
-		t.Errorf("failed to get brand that should be in repository: %v", err)
-	}
-	if got.Name != "EXAMPLE" {
-		t.Errorf("want: %s - got: %s", brandName, got.Name)
-	}
-}
-
-func TestInMemory_Shutdown(t *testing.T) {
-	imr := &inmemory.InMemory{}
-	if err := imr.Shutdown(context.Background()); err != nil {
-		t.Errorf("InMemory.Shutdown() error = %v", err)
-	}
-}
-
-func initialPrices() ([]storage.Price, error) {
-	t1, err := time.Parse("2006-01-02-15.04.05", "2020-06-14-00.00.00")
-	if err != nil {
-		return nil, err
-	}
-	t2, err := time.Parse("2006-01-02-15.04.05", "2020-12-31-23.59.59")
-	if err != nil {
-		return nil, err
-	}
-	t3, err := time.Parse("2006-01-02-15.04.05", "2020-06-14-15.00.00")
-	if err != nil {
-		return nil, err
-	}
-	t4, err := time.Parse("2006-01-02-15.04.05", "2020-06-14-18.30.00")
-	if err != nil {
-		return nil, err
-	}
-	t5, err := time.Parse("2006-01-02-15.04.05", "2020-06-15-00.00.00")
-	if err != nil {
-		return nil, err
-	}
-	t6, err := time.Parse("2006-01-02-15.04.05", "2020-06-15-11.00.00")
-	if err != nil {
-		return nil, err
-	}
-	t7, err := time.Parse("2006-01-02-15.04.05", "2020-06-15-16.00.00")
-	if err != nil {
-		return nil, err
-	}
-	t8, err := time.Parse("2006-01-02-15.04.05", "2020-12-31-23.59.59")
-	if err != nil {
-		return nil, err
-	}
-
-	return []storage.Price{
-		{BrandID: 1, StartDate: t1.UTC(), EndDate: t2.UTC(), ProductID: 35455, Priority: 0, Price: 3550, Curr: "EUR"},
-		{BrandID: 1, StartDate: t3.UTC(), EndDate: t4.UTC(), ProductID: 35455, Priority: 1, Price: 2545, Curr: "EUR"},
-		{BrandID: 1, StartDate: t5.UTC(), EndDate: t6.UTC(), ProductID: 35455, Priority: 1, Price: 3050, Curr: "EUR"},
-		{BrandID: 1, StartDate: t7.UTC(), EndDate: t8.UTC(), ProductID: 35455, Priority: 1, Price: 3895, Curr: "EUR"},
-	}, nil
-}
-
-func TestGetPrices(t *testing.T) {
-	ctx := context.Background()
-
-	db, err := inmemory.New(ctx)
+	db, err := pricing.NewPostgresRepository(ctx, dbContainer.connStr, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +222,7 @@ func TestGetPrices(t *testing.T) {
 
 	testCases := map[string]struct {
 		test test
-		want storage.FinalPrice
+		want pricing.FinalPrice
 	}{
 		"Test 1": {
 			test: test{
@@ -262,7 +230,7 @@ func TestGetPrices(t *testing.T) {
 				productID: 35455,
 				brandID:   1,
 			},
-			want: storage.FinalPrice{
+			want: pricing.FinalPrice{
 				BrandID:   1,
 				StartDate: prices[0].StartDate,
 				EndDate:   prices[0].EndDate,
@@ -286,3 +254,5 @@ func TestGetPrices(t *testing.T) {
 		})
 	}
 }
+
+// TODO, AddBrand, GetBrand

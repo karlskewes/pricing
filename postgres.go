@@ -1,4 +1,4 @@
-package postgres
+package pricing
 
 import (
 	"context"
@@ -11,12 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/karlskewes/pricing/storage"
 	"github.com/pressly/goose/v3"
 )
 
 // Verify interface compliance at compile time
-var _ storage.Repository = (*Postgres)(nil)
+var _ Repository = (*Postgres)(nil)
 
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
@@ -29,7 +28,7 @@ type Postgres struct {
 	// logger zerolog.Logger // log SQL queries, etc
 }
 
-// New returns a Postgres backed Service for persisting pricing data.
+// NewPostgresRepository returns a Postgres backed Repository for persisting pricing data.
 // New also runs any migrations in the ./migrations directory and it does this
 // over a single new connection before closing the connection and providing
 // a Postgres connection pool for the application main use.
@@ -37,7 +36,7 @@ type Postgres struct {
 // condition with connections.
 // urlExample := "postgres://username:password@localhost:5432/database_name"
 // poolSettingsExample := "?sslmode=verify-ca&pool_max_conns=10"
-func New(ctx context.Context, URL, poolSettings string) (*Postgres, error) {
+func NewPostgresRepository(ctx context.Context, URL, poolSettings string) (*Postgres, error) {
 	connConfig, err := pgx.ParseConfig(URL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL config: %w", err)
@@ -119,23 +118,23 @@ func (pg *Postgres) AddBrand(ctx context.Context, name string) error {
 	return nil
 }
 
-func (pg *Postgres) GetBrand(ctx context.Context, name string) (storage.Brand, error) {
+func (pg *Postgres) GetBrand(ctx context.Context, name string) (Brand, error) {
 	sql := `SELECT (id, name) FROM brand WHERE name=$1`
 
-	var brand storage.Brand
+	var brand Brand
 	err := pg.pool.QueryRow(ctx, sql, name).Scan(&brand)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.Brand{}, errors.New("no matching brand found")
+			return Brand{}, errors.New("no matching brand found")
 		}
 
-		return storage.Brand{}, fmt.Errorf("failed to query database: %w", err)
+		return Brand{}, fmt.Errorf("failed to query database: %w", err)
 	}
 
 	return brand, nil
 }
 
-func (pg *Postgres) AddPrice(ctx context.Context, price storage.Price) error {
+func (pg *Postgres) AddPrice(ctx context.Context, price Price) error {
 	sql := `INSERT INTO price (brand_id, start_date, end_date, product_id, priority, price, curr) VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	_, err := pg.pool.Exec(ctx, sql, price.BrandID, price.StartDate, price.EndDate, price.ProductID, price.Priority, price.Price, price.Curr)
@@ -146,20 +145,20 @@ func (pg *Postgres) AddPrice(ctx context.Context, price storage.Price) error {
 	return nil
 }
 
-func (pg *Postgres) GetPrice(ctx context.Context, brandID, productID int, date time.Time) (storage.FinalPrice, error) {
+func (pg *Postgres) GetPrice(ctx context.Context, brandID, productID int, date time.Time) (FinalPrice, error) {
 	sql := `SELECT start_date, end_date, price, curr FROM price WHERE brand_id=$1 AND product_id=$2 AND start_date<=$3 AND end_date>=$3 ORDER BY priority DESC LIMIT 1`
 
-	fp := storage.FinalPrice{
+	fp := FinalPrice{
 		BrandID:   brandID,
 		ProductID: productID,
 	}
 	err := pg.pool.QueryRow(ctx, sql, brandID, productID, date).Scan(&fp.StartDate, &fp.EndDate, &fp.Price, &fp.Curr)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return storage.FinalPrice{}, errors.New("no matching price found")
+			return FinalPrice{}, errors.New("no matching price found")
 		}
 
-		return storage.FinalPrice{}, fmt.Errorf("failed to query database: %w", err)
+		return FinalPrice{}, fmt.Errorf("failed to query database: %w", err)
 	}
 
 	return fp, nil

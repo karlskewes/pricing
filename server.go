@@ -8,9 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/karlskewes/pricing/storage"
-	"github.com/karlskewes/pricing/storage/inmemory"
-	"github.com/karlskewes/pricing/storage/postgres"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -21,8 +18,8 @@ const (
 )
 
 type App struct {
-	srv     *http.Server
-	storage *storage.Service
+	srv *http.Server
+	svc *Service
 	// logger, etc
 }
 
@@ -38,16 +35,16 @@ func NewApp(args []string) (*App, error) {
 		return nil, fmt.Errorf("unable to parse flags: %w", err)
 	}
 
-	var repo storage.Repository
+	var repo Repository
 	if *enablePostgres {
-		postgres, err := postgres.New(context.Background(), *dbConnStr, *dbPoolSettings)
+		postgres, err := NewPostgresRepository(context.Background(), *dbConnStr, *dbPoolSettings)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new postgres database pool: %w", err)
 		}
 
 		repo = postgres
 	} else {
-		imr, err := inmemory.New(context.Background())
+		imr, err := NewInMemoryRepository(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("failed to create new in-memory repository: %w", err)
 		}
@@ -55,7 +52,7 @@ func NewApp(args []string) (*App, error) {
 		repo = imr
 	}
 
-	storage := storage.NewService(repo)
+	svc := NewService(repo)
 
 	mux := http.NewServeMux()
 	// add middleware for Prometheus metrics, logging, OTEL, etc
@@ -67,7 +64,7 @@ func NewApp(args []string) (*App, error) {
 			Addr:    defaultListenAddr,
 			Handler: mux,
 		},
-		storage: storage,
+		svc: svc,
 	}
 
 	return app, nil
