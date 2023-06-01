@@ -186,7 +186,7 @@ func TestGetPrices(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = db.AddBrand(ctx, "ZARA")
+	err = db.AddBrand(ctx, "EXAMPLE")
 	if err != nil {
 		t.Fatal(err)
 	}
