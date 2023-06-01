@@ -1,5 +1,5 @@
-// package storage implements storing and retrieving pricing data.
-package storage
+// package pricing implements implements storing and retrieving pricing data.
+package pricing
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type Price struct {
 	EndDate   time.Time // END_DATE: date range in which the indicated price applies.
 	ProductID int       // PRODUCT_ID: Product code identifier.
 	Priority  int       // PRIORITY: Price application disambiguator. If two prices coincide in a date range, the one with higher priority (higher numerical value) is applied.
-	Price     int       // PRICE: final selling price. Lowest unit for currency, e.g: cents
+	Price     int       // PRICE: final selling price. Lowest unit for currency, e.g: cents // could be money.Money
 	Curr      string    // CURR: currency iso.
 }
 
