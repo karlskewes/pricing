@@ -220,3 +220,69 @@ func initialPrices() ([]storage.Price, error) {
 		{BrandID: 1, StartDate: t7.UTC(), EndDate: t8.UTC(), ProductID: 35455, Priority: 1, Price: 3895, Curr: "EUR"},
 	}, nil
 }
+
+func TestGetPrices(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := inmemory.New(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.AddBrand(ctx, "ZARA")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prices, err := initialPrices()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, price := range prices {
+		err := db.AddPrice(ctx, price)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	type test struct {
+		date      time.Time
+		productID int
+		brandID   int
+	}
+
+	testCases := map[string]struct {
+		test test
+		want storage.FinalPrice
+	}{
+		"Test 1": {
+			test: test{
+				date:      time.Date(2020, 06, 14, 10, 0, 0, 0, time.UTC),
+				productID: 35455,
+				brandID:   1,
+			},
+			want: storage.FinalPrice{
+				BrandID:   1,
+				StartDate: prices[0].StartDate,
+				EndDate:   prices[0].EndDate,
+				ProductID: 35455,
+				Price:     3550,
+				Curr:      "EUR",
+			},
+		},
+	}
+
+	for name, tc := range testCases {
+		tt := tc
+		t.Run(name, func(t *testing.T) {
+			got, err := db.GetPrice(context.Background(), tt.test.brandID, tt.test.productID, tt.test.date)
+			if err != nil {
+				t.Errorf("failed to get price: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("db.GetPrice(...) mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
