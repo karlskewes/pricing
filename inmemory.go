@@ -14,7 +14,7 @@ var _ Repository = (*InMemoryRepository)(nil)
 type InMemoryRepository struct {
 	brands map[string]int // brands[name]ID
 	prices []Price        // suboptimal data structure
-	mutex  sync.RWMutex
+	mu     sync.RWMutex
 	// logger zerolog.Logger // log db queries, etc
 }
 
@@ -38,8 +38,8 @@ func (imr *InMemoryRepository) AddBrand(ctx context.Context, name string) error 
 		return fmt.Errorf("brand name already exists: %s with id: %d", name, id)
 	}
 
-	imr.mutex.Lock()
-	defer imr.mutex.Unlock()
+	imr.mu.Lock()
+	defer imr.mu.Unlock()
 
 	imr.brands[name] = len(imr.brands) + 1 // start from 1 to match Postgres implementation
 
@@ -61,8 +61,8 @@ func (imr *InMemoryRepository) GetBrand(ctx context.Context, name string) (Brand
 }
 
 func (imr *InMemoryRepository) AddPrice(ctx context.Context, price Price) error {
-	imr.mutex.Lock()
-	defer imr.mutex.Unlock()
+	imr.mu.Lock()
+	defer imr.mu.Unlock()
 	imr.prices = append(imr.prices, price)
 
 	return nil
@@ -72,8 +72,8 @@ func (imr *InMemoryRepository) GetPrice(ctx context.Context, brandID, productID 
 	// initialize a slice of applicable rates which can filter later
 	rates := make([]Price, 0)
 
-	imr.mutex.RLock()
-	defer imr.mutex.RUnlock()
+	imr.mu.RLock()
+	defer imr.mu.RUnlock()
 	// O(n) walk slice to find suitable items
 	for _, price := range imr.prices {
 		if price.BrandID != brandID || price.ProductID != productID {
